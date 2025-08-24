@@ -189,7 +189,7 @@ This is a vibe-coded project, so contributions should match the energy:
 
 ## License
 
-MIT License - Use it, modify it, vibe with it.
+LGPL 3.0 - Use it, modify it, vibe with it (but share improvements back to the community).
 
 ## Credits
 
