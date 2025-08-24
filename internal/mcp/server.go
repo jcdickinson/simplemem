@@ -341,6 +341,9 @@ func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolReque
 			continue
 		}
 
+		// Calculate content length
+		contentLength := len(memInfo.Content)
+		
 		result += fmt.Sprintf("📄 **%s**", memory)
 		if memInfo.Frontmatter.Title != "" {
 			result += fmt.Sprintf(" - %s", memInfo.Frontmatter.Title)
@@ -357,6 +360,8 @@ func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolReque
 			}
 			result += fmt.Sprintf(" 🏷️[%s]", strings.Join(tagsList, ", "))
 		}
+
+		result += fmt.Sprintf(" (%d chars)", contentLength)
 
 		if !memInfo.Frontmatter.Modified.IsZero() {
 			result += fmt.Sprintf(" (modified: %s)", memInfo.Frontmatter.Modified.Format("2006-01-02"))
