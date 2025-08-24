@@ -1,0 +1,20 @@
+build/
+.jj/
+scratch/
+CLAUDE.local.md
+
+# Go binaries
+simplemem
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Coverage files
+*.out
+
+# Memory storage
+.memories/

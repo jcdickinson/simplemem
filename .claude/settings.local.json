@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__serena__activate_project",
+      "mcp__serena__check_onboarding_performed",
+      "mcp__serena__onboarding",
+      "mcp__serena__list_dir",
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__find_symbol",
+      "Bash(go get:*)",
+      "Bash(go build:*)",
+      "Bash(go mod:*)",
+      "mcp__self-simplemem__list_memories",
+      "mcp__self-simplemem__create_memory",
+      "mcp__self-simplemem__read_memory",
+      "mcp__self-simplemem__get_backlinks",
+      "mcp__self-simplemem__search_memories",
+      "mcp__self-simplemem__update_memory",
+      "mcp__self-simplemem__delete_memory",
+      "Bash(jj status:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "self-simplemem"
+  ]
+}

@@ -1,0 +1,64 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/jcdickinson/simplemem/internal/mcp"
+)
+
+func main() {
+	// Create the MCP server
+	server, err := mcp.NewServer()
+	if err != nil {
+		log.Fatalf("Failed to create server: %v", err)
+	}
+
+	// Set up error channel for server errors
+	errCh := make(chan error)
+	go func() {
+		errCh <- server.Run()
+	}()
+
+	// Set up signal handling
+	if err = signalWaiter(errCh); err != nil {
+		log.Fatalf("Server error: %v", err)
+		return
+	}
+
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Shutdown error: %v", err)
+	}
+}
+
+func signalWaiter(errCh chan error) error {
+	signalToNotify := []os.Signal{syscall.SIGINT, syscall.SIGHUP, syscall.SIGTERM}
+	if signal.Ignored(syscall.SIGHUP) {
+		signalToNotify = []os.Signal{syscall.SIGINT, syscall.SIGTERM}
+	}
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, signalToNotify...)
+
+	select {
+	case sig := <-signals:
+		switch sig {
+		case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM:
+			log.Printf("Received signal: %s\n", sig)
+			// graceful shutdown
+			return nil
+		}
+	case err := <-errCh:
+		return err
+	}
+
+	return nil
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "self-simplemem": {
+      "type": "stdio",
+      "command": "just",
+      "args": [
+        "run"
+      ],
+      "env": {}
+    }
+  }
+}
