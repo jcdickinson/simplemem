@@ -9,11 +9,14 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"github.com/jcdickinson/simplemem/internal/config"
 	"github.com/jcdickinson/simplemem/internal/mcp"
 )
 
 var (
-	dbPath string
+	dbPath     string
+	configFile string
 )
 
 var rootCmd = &cobra.Command{
@@ -33,7 +36,27 @@ func Execute() {
 }
 
 func init() {
+	cobra.OnInitialize(initConfig)
+	
+	// Persistent flags
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is config.toml in various search paths)")
 	rootCmd.PersistentFlags().StringVar(&dbPath, "db", ".cache/simplemem.db", "Path to the database file")
+	
+	// Bind flags to Viper
+	viper.BindPFlag("db", rootCmd.PersistentFlags().Lookup("db"))
+}
+
+// initConfig reads in config file and ENV variables
+func initConfig() {
+	if configFile != "" {
+		// Use config file from the flag
+		viper.SetConfigFile(configFile)
+	}
+	
+	// Initialize Viper configuration
+	if err := config.InitializeViper(); err != nil {
+		log.Printf("Warning: failed to initialize configuration: %v", err)
+	}
 }
 
 func runServer(cmd *cobra.Command, args []string) {

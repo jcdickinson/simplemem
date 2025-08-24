@@ -1,0 +1,27 @@
+# SimpleMem Configuration File (TOML format)
+# Copy this to config.toml and place it in one of the search paths:
+# - Current directory (project-specific)
+# - .config/simplemem/config.toml (project-specific)  
+# - ~/.config/simplemem/config.toml (user-specific)
+# - /etc/simplemem/config.toml (system-wide)
+
+[voyage_ai]
+# VoyageAI API Key - can be specified in several ways:
+# 1. Direct value (not recommended for security)
+# api_key = "your-api-key-here"
+# 
+# 2. Path to file containing the key (recommended)
+# api_key = { path = "~/.config/simplemem/voyage_ai_key" }
+# 
+# 3. Environment variable (SIMPLEMEM_VOYAGE_AI_API_KEY)
+# (no need to specify here, will be picked up automatically)
+
+# VoyageAI model for embeddings (default: voyage-3.5)
+model = "voyage-3.5"
+
+# VoyageAI model for reranking (default: rerank-lite-1)  
+rerank_model = "rerank-lite-1"
+
+# Example of reading API key from file:
+[voyage_ai.api_key]
+path = "~/.config/simplemem/voyage_ai_key"
