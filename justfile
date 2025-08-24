@@ -46,9 +46,32 @@ run-verbose:
 check-deps:
     go list -u -m all
 
-# Create a test memory for testing
-test-create-memory:
-    echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_memory","arguments":{"name":"test","content":"# Test Memory\n\nThis is a test memory."}},"id":1}' | go run cmd/simplemem/main.go
+# Test with custom JSON-RPC call and optional custom DB
+# Usage: just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":1}' [/path/to/test.db]
+test-json JSON DB="":
+    #!/usr/bin/env bash
+    if [ -n "{{DB}}" ]; then
+        echo '{{JSON}}' | go run cmd/simplemem/main.go --db {{DB}}
+    else
+        echo '{{JSON}}' | go run cmd/simplemem/main.go
+    fi
+
+# Test semantic backlinks functionality (creates multiple memories to trigger semantic linking)
+test-backlinks DB="/tmp/backlinks-test.db":
+    @echo "Testing semantic backlinks with database: {{DB}}"
+    @echo "Removing existing test database..."
+    rm -f {{DB}}
+    @echo "Creating first memory..."
+    just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_memory","arguments":{"content":"---\nname: test-ai-memory\ntitle: AI Memory Test\n---\n\n# AI and Machine Learning\n\nThis memory is about artificial intelligence and machine learning concepts.\n"}},"id":1}' {{DB}}
+    @echo "\nCreating second memory..."
+    just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_memory","arguments":{"content":"---\nname: test-ml-memory\ntitle: ML Memory Test\n---\n\n# Machine Learning Algorithms\n\nThis memory covers various machine learning algorithms and their applications.\n"}},"id":2}' {{DB}}
+    @echo "\nListing memories to verify creation..."
+    just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":3}' {{DB}}
+
+# Quick test with clean database
+test-clean DB="/tmp/test-clean.db":
+    rm -f {{DB}}
+    just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":1}' {{DB}}
 
 # Initialize memories directory
 init:

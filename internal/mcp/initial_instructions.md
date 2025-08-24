@@ -30,6 +30,11 @@ This project includes a SimpleMem MCP server that provides persistent memory sto
 - **Create memories for all tasks that need doing**
 - **Tag todo items with `todo: true`** for easy filtering
 - **Update todo memories** as work progresses (in_progress, completed, blocked)
+- **Use the `change_tag` tool** to efficiently update TODO states and other metadata:
+  - `change_tag name="my-todo" tags={"status": "in_progress"}` 
+  - `change_tag name="my-todo" tags={"status": "completed", "priority": "high"}`
+  - `change_tag name="my-todo" tags={"status": null}` (removes the status tag)
+  - `change_tag name="my-todo" tags={"todo": true, "status": "in_progress", "old_tag": null}` (sets multiple tags at once)
 - **Link related todos** to create task dependency graphs
 - **Archive completed todos** rather than deleting them
 - **CRITICAL**: When you discover issues or "minor problems" during work, **immediately create TODO memories**

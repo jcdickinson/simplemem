@@ -64,12 +64,12 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 	// Create Memory tool
 	mcpServer.AddTool(
 		mcp.NewTool("create_memory",
-			mcp.WithDescription("Create a new memory document. Supports YAML frontmatter for metadata including title, description, tags, and timestamps. Name can be specified either as a parameter or in the frontmatter 'name' field."),
+			mcp.WithDescription("Create a new memory document. Supports YAML frontmatter for metadata including title, description, and tags. Name can be specified either as a parameter or in the frontmatter 'name' field. Timestamps (created/modified) are automatically managed by the server."),
 			mcp.WithString("name",
 				mcp.Description("Name of the memory (without .md extension). Optional if specified in frontmatter."),
 			),
 			mcp.WithString("content",
-				mcp.Description("Content of the memory in markdown format"),
+				mcp.Description("Content of the memory in markdown format. Any timestamps in frontmatter will be overwritten by server-managed values."),
 				mcp.Required(),
 			),
 		),
@@ -91,12 +91,12 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 	// Update Memory tool
 	mcpServer.AddTool(
 		mcp.NewTool("update_memory",
-			mcp.WithDescription("Update an existing memory document. Name can be specified either as a parameter or in the frontmatter 'name' field."),
+			mcp.WithDescription("Update an existing memory document. Name can be specified either as a parameter or in the frontmatter 'name' field. Timestamps (created/modified) are automatically managed by the server."),
 			mcp.WithString("name",
 				mcp.Description("Name of the memory to update. Optional if specified in frontmatter."),
 			),
 			mcp.WithString("content",
-				mcp.Description("New content for the memory"),
+				mcp.Description("New content for the memory. Any timestamps in frontmatter will be overwritten by server-managed values."),
 				mcp.Required(),
 			),
 		),
@@ -155,6 +155,22 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 		),
 		s.handleGetBacklinks,
 	)
+
+	// Change Tag tool
+	mcpServer.AddTool(
+		mcp.NewTool("change_tag",
+			mcp.WithDescription("Change multiple tags on a memory document. Useful for setting TODO states and other metadata. Tags with null values will be removed. Example: {\"todo\": true, \"status\": \"in_progress\", \"priority\": \"high\", \"old_tag\": null}"),
+			mcp.WithString("name",
+				mcp.Description("Name of the memory to modify"),
+				mcp.Required(),
+			),
+			mcp.WithObject("tags",
+				mcp.Description("Object containing tag key-value pairs to set. Use null values to remove tags."),
+				mcp.Required(),
+			),
+		),
+		s.handleChangeTag,
+	)
 }
 
 func (s *Server) handleCreateMemory(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -174,6 +190,7 @@ func (s *Server) handleCreateMemory(_ context.Context, request mcp.CallToolReque
 		return nil, fmt.Errorf("memory name must be provided either as parameter or in frontmatter 'name' field")
 	}
 
+	// Note: Any user-provided timestamps in content will be overwritten by server-managed timestamps
 	if err := s.enhancedStore.Create(name, content); err != nil {
 		return nil, err
 	}
@@ -419,6 +436,95 @@ func (s *Server) handleGetBacklinks(_ context.Context, request mcp.CallToolReque
 			mcp.TextContent{
 				Type: "text",
 				Text: result,
+			},
+		},
+	}, nil
+}
+
+func (s *Server) handleChangeTag(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	name := request.GetString("name", "")
+	
+	// Get tags from arguments
+	args := request.GetArguments()
+	tagsArg, ok := args["tags"]
+	if !ok {
+		return nil, fmt.Errorf("tags parameter is required")
+	}
+	
+	tagsMap, ok := tagsArg.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("tags must be an object")
+	}
+
+	if name == "" {
+		return nil, fmt.Errorf("memory name is required")
+	}
+	if len(tagsMap) == 0 {
+		return nil, fmt.Errorf("at least one tag must be specified")
+	}
+
+	// Read the current memory
+	memInfo, err := s.store.ReadWithMetadata(name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read memory '%s': %w", name, err)
+	}
+
+	// Parse the current document to get frontmatter and body
+	fm, body, err := memory.ParseDocument(memInfo.Content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse memory document: %w", err)
+	}
+
+	// Initialize tags map if it doesn't exist
+	if fm.Tags == nil {
+		fm.Tags = make(map[string]interface{})
+	}
+
+	// Track changes for response message
+	var changes []string
+
+	// Process each tag
+	for tagKey, tagValue := range tagsMap {
+		oldValue := fm.Tags[tagKey]
+		
+		if tagValue == nil {
+			// Remove the tag if value is null
+			if oldValue != nil {
+				delete(fm.Tags, tagKey)
+				changes = append(changes, fmt.Sprintf("'%s' removed (was: %v)", tagKey, oldValue))
+			} else {
+				changes = append(changes, fmt.Sprintf("'%s' already absent", tagKey))
+			}
+		} else {
+			// Set or update the tag
+			fm.Tags[tagKey] = tagValue
+			if oldValue != nil {
+				changes = append(changes, fmt.Sprintf("'%s' changed from %v to %v", tagKey, oldValue, tagValue))
+			} else {
+				changes = append(changes, fmt.Sprintf("'%s' set to %v", tagKey, tagValue))
+			}
+		}
+	}
+
+	// Format the updated document
+	updatedContent, err := memory.FormatDocument(fm, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to format updated document: %w", err)
+	}
+
+	// Update the memory using the enhanced store
+	if err := s.enhancedStore.Update(name, updatedContent); err != nil {
+		return nil, fmt.Errorf("failed to update memory: %w", err)
+	}
+
+	// Build response message
+	message := fmt.Sprintf("Updated tags in memory '%s':\n- %s", name, strings.Join(changes, "\n- "))
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: message,
 			},
 		},
 	}, nil

@@ -25,7 +25,8 @@
       "mcp__serena__think_about_collected_information",
       "mcp__serena__think_about_whether_you_are_done",
       "Bash(go doc:*)",
-      "Bash(go list:*)"
+      "Bash(go list:*)",
+      "mcp__serena__insert_after_symbol"
     ],
     "deny": [],
     "ask": []

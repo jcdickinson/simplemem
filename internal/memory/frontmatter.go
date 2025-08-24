@@ -10,6 +10,7 @@ import (
 )
 
 // Frontmatter represents the YAML frontmatter of a memory document
+// Timestamps are automatically managed by the server and stored on-disk
 type Frontmatter struct {
 	Name        string                 `yaml:"name,omitempty"`
 	Title       string                 `yaml:"title,omitempty"`
@@ -199,3 +200,4 @@ func (fm *Frontmatter) UpdateTimestamps(isNew bool) {
 	}
 	fm.Modified = now
 }
+

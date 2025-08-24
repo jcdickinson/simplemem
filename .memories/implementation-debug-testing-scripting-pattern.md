@@ -8,7 +8,7 @@ tags:
   scripting: true
   testing: true
 created: 2025-08-24T00:53:26.113392818-07:00
-modified: 2025-08-24T01:13:14.660757595-07:00
+modified: 2025-08-24T01:44:44.411942505-07:00
 ---
 
 # Debug Testing & Scripting Pattern from debug.md
@@ -58,37 +58,46 @@ echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories",
 }
 ```
 
+## Justfile Integration - NEW IMPROVED APPROACH
+
+### Universal Test Command
+```bash
+# Test any JSON-RPC call with optional custom database
+just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":1}' /tmp/test.db
+```
+
+### Semantic Backlinks Testing
+```bash
+# Comprehensive test that creates multiple memories to trigger semantic linking
+just test-backlinks /tmp/backlinks-test.db
+```
+
+### Quick Clean Tests
+```bash
+# Quick test with fresh database
+just test-clean /tmp/clean-test.db
+```
+
 ## Testing Different Tools
 
 ### Search Memories
 ```bash
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories","arguments":{"query":"search term"}},"id":1}' | ./simplemem
+just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories","arguments":{"query":"search term"}},"id":1}' /tmp/test.db
 ```
 
 ### Create Memory
 ```bash
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_memory","arguments":{"name":"test-memory","content":"# Test\nContent here"}},"id":2}' | ./simplemem
+just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_memory","arguments":{"name":"test-memory","content":"# Test\nContent here"}},"id":2}' /tmp/test.db
 ```
 
 ### List Memories
 ```bash
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":3}' | ./simplemem
+just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":3}' /tmp/test.db
 ```
 
 ## Critical: Testing with Custom Database Path
 
-**IMPORTANT**: Use the `--db` flag to avoid database locking conflicts when testing:
-
-```bash
-# Test basic functionality with custom DB path
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":1}' | ./simplemem --db /tmp/test.db
-
-# Test semantic search with isolated database
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories","arguments":{"query":"search term"}},"id":1}' | ./simplemem --db /tmp/semantic-test.db
-
-# Test with specific test scenarios
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories","arguments":{"query":"project overview"}},"id":1}' | ./simplemem --db /tmp/fix-test.db
-```
+**IMPORTANT**: Always use the `--db` flag to avoid database locking conflicts when testing:
 
 ### Why the --db Flag is Essential
 - **Avoids Database Locking**: Prevents "Conflicting lock" errors when main instance is running
@@ -107,29 +116,51 @@ echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories",
 
 ## Application to Current Migration Testing
 
-We can now test our migrated MCP server using:
+### Basic Functionality Test
 ```bash
-# Test basic functionality
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":1}' | ./simplemem --db /tmp/migration-test.db
-
-# Test with existing memories
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories","arguments":{"query":"MCP migration"}},"id":2}' | ./simplemem --db /tmp/migration-test.db
-
-# Test semantic search fix
-echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories","arguments":{"query":"starting hints getting started"}},"id":3}' | ./simplemem --db /tmp/semantic-fix-test.db
+just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":1}' /tmp/migration-test.db
 ```
+
+### Semantic Search Testing
+```bash
+just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories","arguments":{"query":"MCP migration"}},"id":2}' /tmp/migration-test.db
+```
+
+### Semantic Backlinks Fix Testing
+```bash
+# Use the comprehensive backlinks test
+just test-backlinks /tmp/semantic-fix-test.db
+```
+
+## Justfile Advantages
+
+### 1. Parameterized Testing
+- Easy to change database paths
+- Reusable test patterns
+- Clean command syntax
+
+### 2. Automated Workflows
+- `test-backlinks` handles the complete workflow
+- Automatic database cleanup
+- Consistent test environment
+
+### 3. Documentation as Code
+- Test commands serve as documentation
+- Easy to discover available tests with `just --list`
+- Self-documenting test patterns
 
 ## Related
 - [[implementation-mcp-library-migration-task]]
 - [[todo-fix-semantic-backlinks-sql-constraint]] - Outstanding SQL issue
 - File: `debug.md` (debugging insights)
+- File: `justfile` (test automation)
 - Pattern: Direct JSON-RPC testing for MCP protocol validation
 
 ---
 📝 **Title:** Implementation: Debug Testing & Scripting Pattern
 🏷️ **Tags:** debug, implementation, json-rpc, mcp, scripting, testing
 📅 **Created:** 2025-08-24 00:53:26
-🔄 **Modified:** 2025-08-24 01:11:30
+🔄 **Modified:** 2025-08-24 01:13:14
 
 🔗 **Links found in this memory:**
 - [implementation-mcp-library-migration-task](implementation-mcp-library-migration-task.md) (wiki link)

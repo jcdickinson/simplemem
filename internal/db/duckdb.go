@@ -124,7 +124,7 @@ func (db *DB) initSchema() error {
 		// Create indexes separately for semantic_backlinks table
 		`CREATE INDEX IF NOT EXISTS idx_semantic_backlinks_a ON semantic_backlinks (memory_a_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_semantic_backlinks_b ON semantic_backlinks (memory_b_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_semantic_backlinks_score ON semantic_backlinks (similarity_score)`,
+		// Note: Removed idx_semantic_backlinks_score index because it prevents ON CONFLICT updates in DuckDB
 	}
 
 	for _, query := range queries {
@@ -468,11 +468,12 @@ func (db *DB) UpsertSemanticBacklink(memoryAID, memoryBID int, similarity float3
 		memoryAID, memoryBID = memoryBID, memoryAID
 	}
 
+	// Use INSERT ... ON CONFLICT but without trying to update the id column
 	query := `
 		INSERT INTO semantic_backlinks (id, memory_a_id, memory_b_id, similarity_score)
 		VALUES (nextval('seq_backlink_id'), ?, ?, ?)
 		ON CONFLICT (memory_a_id, memory_b_id) DO UPDATE SET
-			similarity_score = excluded.similarity_score`
+			similarity_score = EXCLUDED.similarity_score`
 
 	_, err := db.conn.Exec(query, memoryAID, memoryBID, similarity)
 	if err != nil {

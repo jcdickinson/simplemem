@@ -2,6 +2,7 @@ build/
 .jj/
 scratch/
 CLAUDE.local.md
+claude.justfile
 .direnv/
 
 # Go binaries
@@ -28,3 +29,4 @@ simplemem
 
 .config/simplemem
 .claude/settings.local.json
+.CLAUDE.local.md
