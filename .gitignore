@@ -16,5 +16,5 @@ simplemem
 # Coverage files
 *.out
 
-# Memory storage
-.memories/
+# Local database cache
+.cache/
