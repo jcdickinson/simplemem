@@ -2,6 +2,7 @@ build/
 .jj/
 scratch/
 CLAUDE.local.md
+.direnv/
 
 # Go binaries
 simplemem
@@ -18,3 +19,12 @@ simplemem
 
 # Local database cache
 .cache/
+
+# Tool directories
+.chunkhound/
+.serena/
+
+# Config
+
+.config/simplemem
+.claude/settings.local.json

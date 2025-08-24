@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -12,8 +13,13 @@ import (
 )
 
 func main() {
-	// Create the MCP server
-	server, err := mcp.NewServer()
+	// Parse command line flags
+	var dbPath string
+	flag.StringVar(&dbPath, "db", ".cache/simplemem.db", "Path to the database file")
+	flag.Parse()
+
+	// Create the MCP server with custom database path
+	server, err := mcp.NewServer(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}

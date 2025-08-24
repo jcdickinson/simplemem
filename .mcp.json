@@ -6,7 +6,8 @@
       "args": [
         "run"
       ],
-      "env": {}
+      "env": {},
+      "instructions": "Make aggressive use of the memory store to track all work, discoveries, and todos. The memory store is your persistent brain - not for human consumption but for maintaining project knowledge across sessions. Create memories for everything you learn about the codebase. Create todo memories tagged with 'todo: true' for tasks that need doing. Update memories frequently as your understanding evolves. Think of this as your personal Obsidian/Notion workspace to maintain institutional knowledge and work continuity."
     }
   }
 }

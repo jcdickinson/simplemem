@@ -17,7 +17,15 @@
       "mcp__self-simplemem__search_memories",
       "mcp__self-simplemem__update_memory",
       "mcp__self-simplemem__delete_memory",
-      "Bash(jj status:*)"
+      "Bash(jj status:*)",
+      "Bash(mkdir:*)",
+      "mcp__serena__search_for_pattern",
+      "mcp__serena__write_memory",
+      "mcp__serena__find_file",
+      "mcp__serena__think_about_collected_information",
+      "mcp__serena__think_about_whether_you_are_done",
+      "Bash(go doc:*)",
+      "Bash(go list:*)"
     ],
     "deny": [],
     "ask": []

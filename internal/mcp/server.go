@@ -2,185 +2,196 @@ package mcp
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"strings"
 
-	"github.com/ThinkInAIXYZ/go-mcp/protocol"
-	"github.com/ThinkInAIXYZ/go-mcp/server"
-	"github.com/ThinkInAIXYZ/go-mcp/transport"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/jcdickinson/simplemem/internal/config"
 	"github.com/jcdickinson/simplemem/internal/memory"
 )
 
+//go:embed initial_instructions.md
+var initialInstructions string
+
 type Server struct {
-	mcpServer *server.Server
-	store     *memory.Store
+	mcpServer     *server.MCPServer
+	store         *memory.Store
+	enhancedStore *memory.EnhancedStore
 }
 
-type createMemoryReq struct {
-	Name    string `json:"name" description:"Name of the memory (without .md extension)"`
-	Content string `json:"content" description:"Content of the memory in markdown format"`
-}
 
-type readMemoryReq struct {
-	Name string `json:"name" description:"Name of the memory to read"`
-}
-
-type updateMemoryReq struct {
-	Name    string `json:"name" description:"Name of the memory to update"`
-	Content string `json:"content" description:"New content for the memory"`
-}
-
-type deleteMemoryReq struct {
-	Name string `json:"name" description:"Name of the memory to delete"`
-}
-
-type searchMemoriesReq struct {
-	Query string `json:"query" description:"Search query - can search content or use 'tag:tagname' to search by tag"`
-}
-
-type getBacklinksReq struct {
-	Name string `json:"name" description:"Name of the memory to find backlinks for"`
-}
-
-func NewServer() (*Server, error) {
-	s := &Server{
-		store: memory.NewStore(".memories"),
-	}
-
-	// Initialize the store
-	if err := s.store.Initialize(); err != nil {
-		return nil, fmt.Errorf("failed to initialize store: %w", err)
-	}
-
-	// Create MCP server with stdio transport
-	mcpServer, err := server.NewServer(
-		transport.NewStdioServerTransport(),
-		server.WithServerInfo(protocol.Implementation{
-			Name:    "simplemem",
-			Version: "0.1.0",
-		}),
-	)
+func NewServer(dbPath string) (*Server, error) {
+	// Load configuration
+	cfg, err := config.Load()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create MCP server: %w", err)
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
+
+	// Create enhanced store with custom db path
+	enhancedStore, err := memory.NewEnhancedStoreWithDBPath(".memories", cfg, dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create enhanced store: %w", err)
+	}
+
+	s := &Server{
+		store:         memory.NewStore(".memories"),
+		enhancedStore: enhancedStore,
+	}
+
+	// Initialize the enhanced store (which also initializes the basic store)
+	if err := s.enhancedStore.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize enhanced store: %w", err)
+	}
+
+	// Create MCP server with initial instructions support
+	mcpServer := server.NewMCPServer(
+		"simplemem",
+		"0.1.0",
+		server.WithInstructions(initialInstructions),
+		server.WithToolCapabilities(true),
+	)
 
 	// Register all tools
-	if err := s.registerTools(mcpServer); err != nil {
-		return nil, fmt.Errorf("failed to register tools: %w", err)
-	}
+	s.registerTools(mcpServer)
 
 	s.mcpServer = mcpServer
 	return s, nil
 }
 
-func (s *Server) registerTools(mcpServer *server.Server) error {
+func (s *Server) registerTools(mcpServer *server.MCPServer) {
 	// Create Memory tool
-	createTool, err := protocol.NewTool(
-		"create_memory",
-		"Create a new memory document. Supports YAML frontmatter for metadata including title, description, tags, and timestamps",
-		createMemoryReq{},
+	mcpServer.AddTool(
+		mcp.NewTool("create_memory",
+			mcp.WithDescription("Create a new memory document. Supports YAML frontmatter for metadata including title, description, tags, and timestamps. Name can be specified either as a parameter or in the frontmatter 'name' field."),
+			mcp.WithString("name",
+				mcp.Description("Name of the memory (without .md extension). Optional if specified in frontmatter."),
+			),
+			mcp.WithString("content",
+				mcp.Description("Content of the memory in markdown format"),
+				mcp.Required(),
+			),
+		),
+		s.handleCreateMemory,
 	)
-	if err != nil {
-		return err
-	}
-	mcpServer.RegisterTool(createTool, s.handleCreateMemory)
 
 	// Read Memory tool
-	readTool, err := protocol.NewTool(
-		"read_memory",
-		"Read a memory document with full metadata including tags, timestamps, and links",
-		readMemoryReq{},
+	mcpServer.AddTool(
+		mcp.NewTool("read_memory",
+			mcp.WithDescription("Read a memory document with full metadata including tags, timestamps, and links"),
+			mcp.WithString("name",
+				mcp.Description("Name of the memory to read"),
+				mcp.Required(),
+			),
+		),
+		s.handleReadMemory,
 	)
-	if err != nil {
-		return err
-	}
-	mcpServer.RegisterTool(readTool, s.handleReadMemory)
 
 	// Update Memory tool
-	updateTool, err := protocol.NewTool(
-		"update_memory",
-		"Update an existing memory document",
-		updateMemoryReq{},
+	mcpServer.AddTool(
+		mcp.NewTool("update_memory",
+			mcp.WithDescription("Update an existing memory document. Name can be specified either as a parameter or in the frontmatter 'name' field."),
+			mcp.WithString("name",
+				mcp.Description("Name of the memory to update. Optional if specified in frontmatter."),
+			),
+			mcp.WithString("content",
+				mcp.Description("New content for the memory"),
+				mcp.Required(),
+			),
+		),
+		s.handleUpdateMemory,
 	)
-	if err != nil {
-		return err
-	}
-	mcpServer.RegisterTool(updateTool, s.handleUpdateMemory)
 
 	// Delete Memory tool
-	deleteTool, err := protocol.NewTool(
-		"delete_memory",
-		"Delete a memory document",
-		deleteMemoryReq{},
+	mcpServer.AddTool(
+		mcp.NewTool("delete_memory",
+			mcp.WithDescription("Delete a memory document"),
+			mcp.WithString("name",
+				mcp.Description("Name of the memory to delete"),
+				mcp.Required(),
+			),
+		),
+		s.handleDeleteMemory,
 	)
-	if err != nil {
-		return err
-	}
-	mcpServer.RegisterTool(deleteTool, s.handleDeleteMemory)
 
 	// List Memories tool
-	listTool, err := protocol.NewTool(
-		"list_memories",
-		"List all memory documents with metadata preview including titles, tags, and modification dates",
-		struct{}{},
+	mcpServer.AddTool(
+		mcp.NewTool("list_memories",
+			mcp.WithDescription("List all memory documents with metadata preview including titles, tags, and modification dates"),
+		),
+		s.handleListMemories,
 	)
-	if err != nil {
-		return err
-	}
-	mcpServer.RegisterTool(listTool, s.handleListMemories)
 
 	// Search Memories tool
-	searchTool, err := protocol.NewTool(
-		"search_memories",
-		"Search memories by content or tags. Use 'tag:tagname' to search by tag, or 'tag:' to list all tags",
-		searchMemoriesReq{},
+	mcpServer.AddTool(
+		mcp.NewTool("search_memories",
+			mcp.WithDescription("Semantically search memories using natural language queries with optional tag filtering. Returns ranked results with snippets and relevance scores. Tags can filter by presence (empty value) or specific values."),
+			mcp.WithString("query",
+				mcp.Description("Semantic search query to find related memories"),
+				mcp.Required(),
+			),
+			mcp.WithObject("tags",
+				mcp.Description("Optional tag filters - key:value pairs. Use empty string as value to check for tag presence only"),
+			),
+			mcp.WithBoolean("require_all",
+				mcp.Description("If true, memory must have ALL specified tags. If false, memory needs ANY of the tags (default: false)"),
+			),
+		),
+		s.handleSearchMemories,
 	)
-	if err != nil {
-		return err
-	}
-	mcpServer.RegisterTool(searchTool, s.handleSearchMemories)
 
 	// Get Backlinks tool
-	backlinksTool, err := protocol.NewTool(
-		"get_backlinks",
-		"Get all memories that link to a specific memory",
-		getBacklinksReq{},
+	mcpServer.AddTool(
+		mcp.NewTool("get_backlinks",
+			mcp.WithDescription("Get memories related to a specific memory through explicit links and semantic similarity. Optionally rerank by query relevance."),
+			mcp.WithString("name",
+				mcp.Description("Name of the memory to find backlinks for"),
+				mcp.Required(),
+			),
+			mcp.WithString("query",
+				mcp.Description("Optional query to rerank backlinks by relevance"),
+			),
+		),
+		s.handleGetBacklinks,
 	)
-	if err != nil {
-		return err
-	}
-	mcpServer.RegisterTool(backlinksTool, s.handleGetBacklinks)
-
-	return nil
 }
 
-func (s *Server) handleCreateMemory(_ context.Context, request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
-	req := new(createMemoryReq)
-	if err := protocol.VerifyAndUnmarshal(request.RawArguments, &req); err != nil {
+func (s *Server) handleCreateMemory(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	name := request.GetString("name", "")
+	content := request.GetString("content", "")
+
+	// Try to extract name from frontmatter if not provided in request
+	if name == "" {
+		fm, _, err := memory.ParseDocument(content)
+		if err == nil && fm.Name != "" {
+			name = fm.Name
+		}
+	}
+
+	// Validate that we have a name
+	if name == "" {
+		return nil, fmt.Errorf("memory name must be provided either as parameter or in frontmatter 'name' field")
+	}
+
+	if err := s.enhancedStore.Create(name, content); err != nil {
 		return nil, err
 	}
 
-	if err := s.store.Create(req.Name, req.Content); err != nil {
-		return nil, err
-	}
-
-	return &protocol.CallToolResult{
-		Content: []protocol.Content{
-			&protocol.TextContent{
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("Memory '%s' created successfully", req.Name),
+				Text: fmt.Sprintf("Memory '%s' created successfully", name),
 			},
 		},
 	}, nil
 }
 
-func (s *Server) handleReadMemory(_ context.Context, request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
-	req := new(readMemoryReq)
-	if err := protocol.VerifyAndUnmarshal(request.RawArguments, &req); err != nil {
-		return nil, err
-	}
+func (s *Server) handleReadMemory(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	name := request.GetString("name", "")
 
-	memInfo, err := s.store.ReadWithMetadata(req.Name)
+	memInfo, err := s.store.ReadWithMetadata(name)
 	if err != nil {
 		return nil, err
 	}
@@ -230,9 +241,9 @@ func (s *Server) handleReadMemory(_ context.Context, request *protocol.CallToolR
 		response += "\n\n---" + metaInfo
 	}
 
-	return &protocol.CallToolResult{
-		Content: []protocol.Content{
-			&protocol.TextContent{
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
 				Type: "text",
 				Text: response,
 			},
@@ -240,56 +251,64 @@ func (s *Server) handleReadMemory(_ context.Context, request *protocol.CallToolR
 	}, nil
 }
 
-func (s *Server) handleUpdateMemory(_ context.Context, request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
-	req := new(updateMemoryReq)
-	if err := protocol.VerifyAndUnmarshal(request.RawArguments, &req); err != nil {
+func (s *Server) handleUpdateMemory(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	name := request.GetString("name", "")
+	content := request.GetString("content", "")
+
+	// Try to extract name from frontmatter if not provided in request
+	if name == "" {
+		fm, _, err := memory.ParseDocument(content)
+		if err == nil && fm.Name != "" {
+			name = fm.Name
+		}
+	}
+
+	// Validate that we have a name
+	if name == "" {
+		return nil, fmt.Errorf("memory name must be provided either as parameter or in frontmatter 'name' field")
+	}
+
+	if err := s.enhancedStore.Update(name, content); err != nil {
 		return nil, err
 	}
 
-	if err := s.store.Update(req.Name, req.Content); err != nil {
-		return nil, err
-	}
-
-	return &protocol.CallToolResult{
-		Content: []protocol.Content{
-			&protocol.TextContent{
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("Memory '%s' updated successfully", req.Name),
+				Text: fmt.Sprintf("Memory '%s' updated successfully", name),
 			},
 		},
 	}, nil
 }
 
-func (s *Server) handleDeleteMemory(_ context.Context, request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
-	req := new(deleteMemoryReq)
-	if err := protocol.VerifyAndUnmarshal(request.RawArguments, &req); err != nil {
+func (s *Server) handleDeleteMemory(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	name := request.GetString("name", "")
+
+	if err := s.enhancedStore.Delete(name); err != nil {
 		return nil, err
 	}
 
-	if err := s.store.Delete(req.Name); err != nil {
-		return nil, err
-	}
-
-	return &protocol.CallToolResult{
-		Content: []protocol.Content{
-			&protocol.TextContent{
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
 				Type: "text",
-				Text: fmt.Sprintf("Memory '%s' deleted successfully", req.Name),
+				Text: fmt.Sprintf("Memory '%s' deleted successfully", name),
 			},
 		},
 	}, nil
 }
 
-func (s *Server) handleListMemories(_ context.Context, request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
+func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	memories, err := s.store.List()
 	if err != nil {
 		return nil, err
 	}
 
 	if len(memories) == 0 {
-		return &protocol.CallToolResult{
-			Content: []protocol.Content{
-				&protocol.TextContent{
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
 					Type: "text",
 					Text: "No memories found",
 				},
@@ -333,9 +352,9 @@ func (s *Server) handleListMemories(_ context.Context, request *protocol.CallToo
 		result += "\n\n"
 	}
 
-	return &protocol.CallToolResult{
-		Content: []protocol.Content{
-			&protocol.TextContent{
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
 				Type: "text",
 				Text: result,
 			},
@@ -343,109 +362,36 @@ func (s *Server) handleListMemories(_ context.Context, request *protocol.CallToo
 	}, nil
 }
 
-func (s *Server) handleSearchMemories(_ context.Context, request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
-	req := new(searchMemoriesReq)
-	if err := protocol.VerifyAndUnmarshal(request.RawArguments, &req); err != nil {
-		return nil, err
+func (s *Server) handleSearchMemories(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	query := request.GetString("query", "")
+	
+	// Get tags and require_all from arguments
+	args := request.GetArguments()
+	var tags map[string]string
+	var requireAll bool
+	
+	if tagsArg, ok := args["tags"]; ok {
+		if tagsMap, ok := tagsArg.(map[string]interface{}); ok {
+			tags = make(map[string]string)
+			for k, v := range tagsMap {
+				tags[k] = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+	
+	if requireAllArg, ok := args["require_all"]; ok {
+		requireAll, _ = requireAllArg.(bool)
 	}
 
-	// Check if this is a tag search
-	if strings.HasPrefix(req.Query, "tag:") {
-		tagName := strings.TrimPrefix(req.Query, "tag:")
-		if tagName == "" {
-			// Show all tags
-			allTags, err := s.store.GetAllTags()
-			if err != nil {
-				return nil, err
-			}
-
-			if len(allTags) == 0 {
-				return &protocol.CallToolResult{
-					Content: []protocol.Content{
-						&protocol.TextContent{
-							Type: "text",
-							Text: "No tags found across memories",
-						},
-					},
-				}, nil
-			}
-
-			result := "All tags:\n\n"
-			for tag, memories := range allTags {
-				result += fmt.Sprintf("🏷️ **%s** (%d memories): %s\n", tag, len(memories), strings.Join(memories, ", "))
-			}
-
-			return &protocol.CallToolResult{
-				Content: []protocol.Content{
-					&protocol.TextContent{
-						Type: "text",
-						Text: result,
-					},
-				},
-			}, nil
-		}
-
-		// Search by specific tag
-		memories, err := s.store.SearchByTag(tagName)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(memories) == 0 {
-			return &protocol.CallToolResult{
-				Content: []protocol.Content{
-					&protocol.TextContent{
-						Type: "text",
-						Text: fmt.Sprintf("No memories found with tag '%s'", tagName),
-					},
-				},
-			}, nil
-		}
-
-		result := fmt.Sprintf("Memories with tag '%s':\n\n", tagName)
-		for _, memory := range memories {
-			result += fmt.Sprintf("📄 %s\n", memory)
-		}
-
-		return &protocol.CallToolResult{
-			Content: []protocol.Content{
-				&protocol.TextContent{
-					Type: "text",
-					Text: result,
-				},
-			},
-		}, nil
-	}
-
-	// Regular content search
-	results, err := s.store.Search(req.Query)
+	// Use semantic search with tag filtering (set to 5 docs as requested)
+	result, err := s.enhancedStore.SearchSemanticMarkdownWithTags(query, tags, requireAll, 5)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to perform semantic search: %w", err)
 	}
 
-	if len(results) == 0 {
-		return &protocol.CallToolResult{
-			Content: []protocol.Content{
-				&protocol.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("No memories found matching '%s'", req.Query),
-				},
-			},
-		}, nil
-	}
-
-	result := fmt.Sprintf("Search results for '%s':\n\n", req.Query)
-	for memory, matches := range results {
-		result += fmt.Sprintf("📄 %s:\n", memory)
-		for _, match := range matches {
-			result += fmt.Sprintf("  %s\n", match)
-		}
-		result += "\n"
-	}
-
-	return &protocol.CallToolResult{
-		Content: []protocol.Content{
-			&protocol.TextContent{
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
 				Type: "text",
 				Text: result,
 			},
@@ -453,36 +399,24 @@ func (s *Server) handleSearchMemories(_ context.Context, request *protocol.CallT
 	}, nil
 }
 
-func (s *Server) handleGetBacklinks(_ context.Context, request *protocol.CallToolRequest) (*protocol.CallToolResult, error) {
-	req := new(getBacklinksReq)
-	if err := protocol.VerifyAndUnmarshal(request.RawArguments, &req); err != nil {
-		return nil, err
+func (s *Server) handleGetBacklinks(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	name := request.GetString("name", "")
+	query := request.GetString("query", "")
+
+	// Use query for reranking if provided, otherwise use memory name as query
+	if query == "" {
+		query = name // Use memory name as default query for reranking
 	}
 
-	backlinks, err := memory.GetBacklinks(s.store, req.Name)
+	// Get enhanced backlinks with reranking (set to 5 docs as requested)
+	result, err := s.enhancedStore.GetEnhancedBacklinks(name, query, 5)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get enhanced backlinks: %w", err)
 	}
 
-	if len(backlinks) == 0 {
-		return &protocol.CallToolResult{
-			Content: []protocol.Content{
-				&protocol.TextContent{
-					Type: "text",
-					Text: fmt.Sprintf("No backlinks found for '%s'", req.Name),
-				},
-			},
-		}, nil
-	}
-
-	result := fmt.Sprintf("Memories linking to '%s':\n", req.Name)
-	for _, backlink := range backlinks {
-		result += fmt.Sprintf("- %s\n", backlink)
-	}
-
-	return &protocol.CallToolResult{
-		Content: []protocol.Content{
-			&protocol.TextContent{
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
 				Type: "text",
 				Text: result,
 			},
@@ -491,9 +425,17 @@ func (s *Server) handleGetBacklinks(_ context.Context, request *protocol.CallToo
 }
 
 func (s *Server) Run() error {
-	return s.mcpServer.Run()
+	return server.ServeStdio(s.mcpServer)
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	return s.mcpServer.Shutdown(ctx)
+	// Close enhanced store
+	if s.enhancedStore != nil {
+		if err := s.enhancedStore.Close(); err != nil {
+			// Log error but don't fail shutdown
+			fmt.Printf("Warning: failed to close enhanced store: %v\n", err)
+		}
+	}
+	// New MCP library handles shutdown automatically
+	return nil
 }
