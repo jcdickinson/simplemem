@@ -33,14 +33,27 @@ jobs:
         with:
           go-version: '1.21'
 
+      - name: Install cross-compilation tools
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.goarch }}" = "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          elif [ "${{ matrix.goos }}" = "windows" ]; then
+            sudo apt-get install -y gcc-mingw-w64-x86-64
+          fi
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
         run: |
           binary_name="simplemem"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             binary_name="${binary_name}.exe"
+            export CC=x86_64-w64-mingw32-gcc
+          elif [ "${{ matrix.goarch }}" = "arm64" ]; then
+            export CC=aarch64-linux-gnu-gcc
           fi
           go build -ldflags="-s -w" -o "${binary_name}" ./cmd/simplemem
 

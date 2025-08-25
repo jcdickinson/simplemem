@@ -15,7 +15,8 @@
       "mcp__self-simplemem__create_memory",
       "mcp__self-simplemem__delete_memory",
       "mcp__self-simplemem__update_memory",
-      "Bash(jj describe:*)"
+      "Bash(jj describe:*)",
+      "Bash(jj new:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
