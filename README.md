@@ -35,7 +35,6 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 - **Linux AMD64**: `simplemem-vX.X.X-linux-amd64.tar.gz`
 - **Linux ARM64**: `simplemem-vX.X.X-linux-arm64.tar.gz`
-- **Windows AMD64**: `simplemem-vX.X.X-windows-amd64.zip`
 
 Extract and place the binary in your PATH.
 

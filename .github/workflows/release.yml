@@ -26,10 +26,6 @@ jobs:
           - goos: linux
             goarch: arm64
             archive: tar.gz
-          - goos: windows
-            goarch: amd64
-            archive: zip
-            extension: .exe
 
     steps:
       - name: Checkout code
@@ -45,8 +41,6 @@ jobs:
           sudo apt-get update
           if [ "${{ matrix.goarch }}" = "arm64" ]; then
             sudo apt-get install -y gcc-aarch64-linux-gnu
-          elif [ "${{ matrix.goos }}" = "windows" ]; then
-            sudo apt-get install -y gcc-mingw-w64-x86-64
           fi
 
       - name: Build binary
@@ -56,10 +50,7 @@ jobs:
           CGO_ENABLED: 1
         run: |
           binary_name="simplemem"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            binary_name="${binary_name}.exe"
-            export CC=x86_64-w64-mingw32-gcc
-          elif [ "${{ matrix.goarch }}" = "arm64" ]; then
+          if [ "${{ matrix.goarch }}" = "arm64" ]; then
             export CC=aarch64-linux-gnu-gcc
           fi
           go build -ldflags="-s -w" -o "${binary_name}" ./cmd/simplemem
@@ -67,19 +58,9 @@ jobs:
       - name: Create archive
         run: |
           binary_name="simplemem"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            binary_name="${binary_name}.exe"
-          fi
-          
           archive_name="simplemem-${{ github.event.release.tag_name }}-${{ matrix.goos }}-${{ matrix.goarch }}"
-          
-          if [ "${{ matrix.archive }}" = "tar.gz" ]; then
-            tar -czf "${archive_name}.tar.gz" "${binary_name}" README.md LICENSE config.toml.example
-            echo "ASSET=${archive_name}.tar.gz" >> $GITHUB_ENV
-          else
-            zip "${archive_name}.zip" "${binary_name}" README.md LICENSE config.toml.example
-            echo "ASSET=${archive_name}.zip" >> $GITHUB_ENV
-          fi
+          tar -czf "${archive_name}.tar.gz" "${binary_name}" README.md LICENSE config.toml.example
+          echo "ASSET=${archive_name}.tar.gz" >> $GITHUB_ENV
 
       - name: Upload release asset
         if: github.event_name == 'release'
