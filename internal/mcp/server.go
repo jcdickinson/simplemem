@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
 	"github.com/jcdickinson/simplemem/internal/config"
 	"github.com/jcdickinson/simplemem/internal/memory"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 )
 
 //go:embed initial_instructions.md
@@ -19,8 +19,8 @@ type Server struct {
 	mcpServer     *server.MCPServer
 	store         *memory.Store
 	enhancedStore *memory.EnhancedStore
+	config        *config.Config
 }
-
 
 func NewServer(dbPath string) (*Server, error) {
 	// Load configuration
@@ -38,6 +38,7 @@ func NewServer(dbPath string) (*Server, error) {
 	s := &Server{
 		store:         memory.NewStore(".memories"),
 		enhancedStore: enhancedStore,
+		config:        cfg,
 	}
 
 	// Initialize the enhanced store (which also initializes the basic store)
@@ -45,11 +46,17 @@ func NewServer(dbPath string) (*Server, error) {
 		return nil, fmt.Errorf("failed to initialize enhanced store: %w", err)
 	}
 
+	actualInitialInstructions := initialInstructions
+
+	if cfg.MaxMemoryLength > 0 {
+		actualInitialInstructions += fmt.Sprintf("\n\nIMPORTANT: Memories have a maximum length of %d in order to encourage creating focused memories. If you need to explain something longer than that, consider splitting it into multiple memories.", cfg.MaxMemoryLength)
+	}
+
 	// Create MCP server with initial instructions support
 	mcpServer := server.NewMCPServer(
 		"simplemem",
 		"0.1.0",
-		server.WithInstructions(initialInstructions),
+		server.WithInstructions(actualInitialInstructions),
 		server.WithToolCapabilities(true),
 	)
 
@@ -61,10 +68,15 @@ func NewServer(dbPath string) (*Server, error) {
 }
 
 func (s *Server) registerTools(mcpServer *server.MCPServer) {
+	limitDesc := ""
+	if s.config.MaxMemoryLength > 0 {
+		limitDesc = fmt.Sprintf(" Content length is limited to %d characters.", s.config.MaxMemoryLength)
+	}
+
 	// Create Memory tool
 	mcpServer.AddTool(
 		mcp.NewTool("create_memory",
-			mcp.WithDescription("Create a new memory document. Supports YAML frontmatter for metadata including title, description, and tags. Name can be specified either as a parameter or in the frontmatter 'name' field. Timestamps (created/modified) are automatically managed by the server."),
+			mcp.WithDescription("Create a new memory document. Supports YAML frontmatter for metadata including title, description, and tags. Name can be specified either as a parameter or in the frontmatter 'name' field. Timestamps must be omitted."+limitDesc),
 			mcp.WithString("name",
 				mcp.Description("Name of the memory (without .md extension). Optional if specified in frontmatter."),
 			),
@@ -74,6 +86,21 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 			),
 		),
 		s.handleCreateMemory,
+	)
+
+	// Update Memory tool
+	mcpServer.AddTool(
+		mcp.NewTool("update_memory",
+			mcp.WithDescription("Update an existing memory document. Name can be specified either as a parameter or in the frontmatter 'name' field. Timestamps (created/modified) are automatically managed by the server."+limitDesc),
+			mcp.WithString("name",
+				mcp.Description("Name of the memory to update. Optional if specified in frontmatter."),
+			),
+			mcp.WithString("content",
+				mcp.Description("New content for the memory. Any timestamps in frontmatter will be overwritten by server-managed values."),
+				mcp.Required(),
+			),
+		),
+		s.handleUpdateMemory,
 	)
 
 	// Read Memory tool
@@ -86,21 +113,6 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 			),
 		),
 		s.handleReadMemory,
-	)
-
-	// Update Memory tool
-	mcpServer.AddTool(
-		mcp.NewTool("update_memory",
-			mcp.WithDescription("Update an existing memory document. Name can be specified either as a parameter or in the frontmatter 'name' field. Timestamps (created/modified) are automatically managed by the server."),
-			mcp.WithString("name",
-				mcp.Description("Name of the memory to update. Optional if specified in frontmatter."),
-			),
-			mcp.WithString("content",
-				mcp.Description("New content for the memory. Any timestamps in frontmatter will be overwritten by server-managed values."),
-				mcp.Required(),
-			),
-		),
-		s.handleUpdateMemory,
 	)
 
 	// Delete Memory tool
@@ -173,6 +185,19 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 	)
 }
 
+func (s *Server) validateMemoryLength(content string) error {
+	// If max_memory_length is <= 0, disable length check
+	if s.config.MaxMemoryLength <= 0 {
+		return nil
+	}
+
+	if len(content) > s.config.MaxMemoryLength {
+		return fmt.Errorf("memory content exceeds maximum length of %d characters (%d characters provided)", s.config.MaxMemoryLength, len(content))
+	}
+
+	return nil
+}
+
 func (s *Server) handleCreateMemory(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name := request.GetString("name", "")
 	content := request.GetString("content", "")
@@ -188,6 +213,11 @@ func (s *Server) handleCreateMemory(_ context.Context, request mcp.CallToolReque
 	// Validate that we have a name
 	if name == "" {
 		return nil, fmt.Errorf("memory name must be provided either as parameter or in frontmatter 'name' field")
+	}
+
+	// Validate memory length
+	if err := s.validateMemoryLength(content); err != nil {
+		return nil, err
 	}
 
 	// Note: Any user-provided timestamps in content will be overwritten by server-managed timestamps
@@ -285,6 +315,11 @@ func (s *Server) handleUpdateMemory(_ context.Context, request mcp.CallToolReque
 		return nil, fmt.Errorf("memory name must be provided either as parameter or in frontmatter 'name' field")
 	}
 
+	// Validate memory length
+	if err := s.validateMemoryLength(content); err != nil {
+		return nil, err
+	}
+
 	if err := s.enhancedStore.Update(name, content); err != nil {
 		return nil, err
 	}
@@ -343,12 +378,12 @@ func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolReque
 
 		// Calculate content length
 		contentLength := len(memInfo.Content)
-		
+
 		result += fmt.Sprintf("📄 **%s**", memory)
 		if memInfo.Frontmatter.Title != "" {
 			result += fmt.Sprintf(" - %s", memInfo.Frontmatter.Title)
 		}
-		
+
 		if len(memInfo.Frontmatter.Tags) > 0 {
 			var tagsList []string
 			for tag, value := range memInfo.Frontmatter.Tags {
@@ -362,6 +397,11 @@ func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolReque
 		}
 
 		result += fmt.Sprintf(" (%d chars)", contentLength)
+
+		// Warn if memory exceeds configured maximum length
+		if s.config.MaxMemoryLength > 0 && contentLength > s.config.MaxMemoryLength {
+			result += fmt.Sprintf(" ⚠️ OVER LIMIT (%d/%d)", contentLength, s.config.MaxMemoryLength)
+		}
 
 		if !memInfo.Frontmatter.Modified.IsZero() {
 			result += fmt.Sprintf(" (modified: %s)", memInfo.Frontmatter.Modified.Format("2006-01-02"))
@@ -386,12 +426,12 @@ func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolReque
 
 func (s *Server) handleSearchMemories(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	query := request.GetString("query", "")
-	
+
 	// Get tags and require_all from arguments
 	args := request.GetArguments()
 	var tags map[string]string
 	var requireAll bool
-	
+
 	if tagsArg, ok := args["tags"]; ok {
 		if tagsMap, ok := tagsArg.(map[string]interface{}); ok {
 			tags = make(map[string]string)
@@ -400,7 +440,7 @@ func (s *Server) handleSearchMemories(_ context.Context, request mcp.CallToolReq
 			}
 		}
 	}
-	
+
 	if requireAllArg, ok := args["require_all"]; ok {
 		requireAll, _ = requireAllArg.(bool)
 	}
@@ -448,14 +488,14 @@ func (s *Server) handleGetBacklinks(_ context.Context, request mcp.CallToolReque
 
 func (s *Server) handleChangeTag(_ context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name := request.GetString("name", "")
-	
+
 	// Get tags from arguments
 	args := request.GetArguments()
 	tagsArg, ok := args["tags"]
 	if !ok {
 		return nil, fmt.Errorf("tags parameter is required")
 	}
-	
+
 	tagsMap, ok := tagsArg.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("tags must be an object")
@@ -491,7 +531,7 @@ func (s *Server) handleChangeTag(_ context.Context, request mcp.CallToolRequest)
 	// Process each tag
 	for tagKey, tagValue := range tagsMap {
 		oldValue := fm.Tags[tagKey]
-		
+
 		if tagValue == nil {
 			// Remove the tag if value is null
 			if oldValue != nil {

@@ -8,7 +8,14 @@
       "mcp__serena__activate_project",
       "mcp__serena__get_symbols_overview",
       "Bash(go build:*)",
-      "Bash(jj diff:*)"
+      "Bash(jj diff:*)",
+      "mcp__serena__search_for_pattern",
+      "mcp__serena__find_file",
+      "mcp__serena__list_dir",
+      "mcp__self-simplemem__create_memory",
+      "mcp__self-simplemem__delete_memory",
+      "mcp__self-simplemem__update_memory",
+      "Bash(jj describe:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

@@ -1,70 +1,53 @@
 ---
-title: 'Knowledge: New MCP Library Analysis (mark3labs/mcp-go)'
-tags:
-  area: implementation
-  component: mcp
-  knowledge: true
-  library: mark3labs-mcp-go
-  migration: true
 created: 2025-08-24T00:42:45.539118196-07:00
-modified: 2025-08-24T00:42:45.539118196-07:00
+modified: 2025-08-24T18:47:46.511824832-07:00
 ---
 
-# New MCP Library Structure (mark3labs/mcp-go v0.38.0)
+# New MCP Library Analysis
 
-## Key Packages
-- `github.com/mark3labs/mcp-go/server` - Server functionality
-- `github.com/mark3labs/mcp-go/mcp` - Core MCP types and protocols
-- `github.com/mark3labs/mcp-go/client` - Client functionality
+## Library Overview
+- **Package**: `github.com/mark3labs/mcp-go`
+- **Version**: v0.10.5
+- **Documentation**: Well-documented with examples
+- **Status**: Actively maintained
 
-## Major API Differences from ThinkInAIXYZ/go-mcp
+## Key Advantages
 
-### Server Creation
+### Better Architecture
+- Clean separation of concerns
+- More idiomatic Go patterns
+- Better error handling
+- Structured parameter handling
+
+### Enhanced Features
+- Built-in tool parameter validation
+- Type-safe parameter extraction
+- Better JSON-RPC compliance
+- Support for initial instructions
+
+### Tool Definition Pattern
 ```go
-// NEW API
-server := server.NewMCPServer(name, version string, opts ...ServerOption)
-
-// vs OLD API  
-server := server.NewServer(transport, server.WithServerInfo(...))
+mcp.NewTool("tool_name",
+    mcp.WithDescription("Tool description"),
+    mcp.WithString("param", mcp.Description("Param desc"), mcp.Required()),
+)
 ```
 
-### Key Features Available
-- **Initial Instructions Support**: `WithInstructions(instructions string)` option!
-- **Multiple Transport Types**: Stdio, HTTP, SSE
-- **Enhanced Capabilities**: Tools, Resources, Prompts with capability flags
-- **Middleware Support**: `WithToolHandlerMiddleware`
-- **Hooks System**: Before/After request hooks
-- **Recovery & Logging**: Built-in options
+## Migration Benefits
+- More maintainable code
+- Better type safety
+- Cleaner tool registration
+- Improved error messages
+- Future-proof implementation
 
-### Tool Registration Pattern
-Based on docs, likely uses method-based registration:
-```go
-server.AddTool("tool_name", handler_func)
-```
+## Implementation Approach
+1. Replace imports from ThinkInAIXYZ to mark3labs
+2. Update tool registration to new pattern
+3. Modify handler signatures
+4. Update parameter extraction
+5. Test all functionality
 
-### Handler Function Signature
-```go
-type ToolHandlerFunc func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)
-```
-
-### Transport Handling
-```go
-// Stdio transport
-server.ServeStdio(mcpServer, opts...)
-```
-
-## Migration Strategy
-1. Update server creation to use `NewMCPServer`
-2. Add `WithInstructions` option for initial instructions
-3. Convert tool registration from `RegisterTool` to new pattern
-4. Update handler signatures if needed
-5. Replace transport initialization
-6. Test all functionality
-
-## Initial Instructions Implementation
-The `WithInstructions(instructions string)` option allows setting initial instructions that will be sent to clients on initialization - exactly what we need!
-
-## Related
-- [[mcp-library-migration-task]]
-- [[knowledge-current-mcp-implementation]]
-- [[simplemem-mcp-server-architecture]]
+## Related Components
+- [[knowledge-current-mcp-implementation]] - Current implementation
+- [[mcp-tool-registration-pattern]] - New registration pattern
+- [[mcp-server-core-structure]] - Server architecture updates

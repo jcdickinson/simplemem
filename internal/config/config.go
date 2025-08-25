@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
 
@@ -24,7 +26,8 @@ type VoyageAIConfig struct {
 
 // Config represents the complete simplemem configuration
 type Config struct {
-	VoyageAI VoyageAIConfig `mapstructure:"voyage_ai"`
+	VoyageAI        VoyageAIConfig `mapstructure:"voyage_ai"`
+	MaxMemoryLength int            `mapstructure:"max_memory_length"`
 }
 
 // InitializeViper sets up Viper configuration with proper search paths and defaults
@@ -59,6 +62,7 @@ func InitializeViper() error {
 	// Set defaults
 	viper.SetDefault("voyage_ai.model", "voyage-3.5")
 	viper.SetDefault("voyage_ai.rerank_model", "rerank-lite-1")
+	viper.SetDefault("max_memory_length", 2000)
 
 	// Enable environment variable support
 	viper.SetEnvPrefix("SIMPLEMEM")
@@ -75,6 +79,27 @@ func InitializeViper() error {
 	return nil
 }
 
+// stringToApiKeyConfigHookFunc returns a mapstructure.DecodeHookFunc that converts
+// string values to ApiKeyConfig structs
+func stringToApiKeyConfigHookFunc() mapstructure.DecodeHookFunc {
+	return func(f, t reflect.Type, data interface{}) (interface{}, error) {
+		if t != reflect.TypeOf(ApiKeyConfig{}) {
+			return data, nil
+		}
+
+		switch f.Kind() {
+		case reflect.String:
+			// If it's a string, treat it as a direct API key value
+			return ApiKeyConfig{Value: data.(string)}, nil
+		case reflect.Map:
+			// If it's a map, let the normal unmarshaling handle it
+			return data, nil
+		default:
+			return data, nil
+		}
+	}
+}
+
 // Load loads configuration using Viper and resolves API keys
 func Load() (*Config, error) {
 	if err := InitializeViper(); err != nil {
@@ -82,7 +107,17 @@ func Load() (*Config, error) {
 	}
 
 	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+	
+	// Configure decoder with custom hook for ApiKeyConfig
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: stringToApiKeyConfigHookFunc(),
+		Result:     &config,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create decoder: %w", err)
+	}
+
+	if err := decoder.Decode(viper.AllSettings()); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
