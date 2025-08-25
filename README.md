@@ -84,10 +84,9 @@ Create a `config.toml` file (see `config.toml.example` for reference):
 model = "voyage-3.5"
 rerank_model = "rerank-lite-1"
 
-[voyage_ai.api_key]
-path = "~/.config/simplemem/voyage_ai_key"
-# OR set directly (not recommended for production)
-# value = "your-api-key-here"
+api_key = { "path" = "~/.config/simplemem/voyage_api_key.txt" }
+# OR
+api_key = "api-key-here"
 ```
 
 #### Environment Variables
@@ -118,7 +117,12 @@ Add to your MCP client configuration:
   "mcpServers": {
     "simplemem": {
       "command": "./simplemem",
-      "args": ["--db", "path/to/your/database.db", "--config", "path/to/config.toml"]
+      "args": [
+        "--db",
+        "path/to/your/database.db",
+        "--config",
+        "path/to/config.toml"
+      ]
     }
   }
 }
@@ -168,7 +172,7 @@ just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"get_bac
   "name": "my-memory-name",
   "metadata": {
     "title": "A Human-Readable Title",
-    "description": "Brief description of the memory", 
+    "description": "Brief description of the memory",
     "tags": {
       "category": "personal",
       "priority": "high",
@@ -290,4 +294,4 @@ LGPL 3.0 - Use it, modify it, vibe with it (but share improvements back to the c
 
 ---
 
-*"It works on my machine, and that machine has good vibes."* ✨
+_"It works on my machine, and that machine has good vibes."_ ✨
