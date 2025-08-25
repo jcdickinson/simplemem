@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/ast"
+	"github.com/gomarkdown/markdown/parser"
 	"github.com/jcdickinson/simplemem/internal/config"
 	"github.com/jcdickinson/simplemem/internal/memory"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -49,7 +52,7 @@ func NewServer(dbPath string) (*Server, error) {
 	actualInitialInstructions := initialInstructions
 
 	if cfg.MaxMemoryLength > 0 {
-		actualInitialInstructions += fmt.Sprintf("\n\nIMPORTANT: Memories have a maximum length of %d in order to encourage creating focused memories. If you need to explain something longer than that, consider splitting it into multiple memories.", cfg.MaxMemoryLength)
+		actualInitialInstructions += fmt.Sprintf("\n\nIMPORTANT: Memories have a maximum length of %d characters (plain-text, with markdown formatting stripped) in order to encourage creating focused memories. If you need to explain something longer than that, consider splitting it into multiple memories.", cfg.MaxMemoryLength)
 	}
 
 	// Create MCP server with initial instructions support
@@ -68,20 +71,21 @@ func NewServer(dbPath string) (*Server, error) {
 }
 
 func (s *Server) registerTools(mcpServer *server.MCPServer) {
-	limitDesc := ""
-	if s.config.MaxMemoryLength > 0 {
-		limitDesc = fmt.Sprintf(" Content length is limited to %d characters.", s.config.MaxMemoryLength)
-	}
 
 	// Create Memory tool
 	mcpServer.AddTool(
 		mcp.NewTool("create_memory",
-			mcp.WithDescription("Create a new memory document. Supports YAML frontmatter for metadata including title, description, and tags. Name can be specified either as a parameter or in the frontmatter 'name' field. Timestamps must be omitted."+limitDesc),
+			mcp.WithDescription("Create a new memory document. Requires metadata object for title, description, and tags. Content length is limited to 2000 characters."),
 			mcp.WithString("name",
-				mcp.Description("Name of the memory (without .md extension). Optional if specified in frontmatter."),
+				mcp.Description("Name of the memory (without .md extension)"),
+				mcp.Required(),
+			),
+			mcp.WithObject("metadata",
+				mcp.Description("Metadata object with required title, description, and tags fields, plus any additional properties"),
+				mcp.Required(),
 			),
 			mcp.WithString("content",
-				mcp.Description("Content of the memory in markdown format. Any timestamps in frontmatter will be overwritten by server-managed values."),
+				mcp.Description("Content of the memory in markdown format"),
 				mcp.Required(),
 			),
 		),
@@ -91,12 +95,17 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 	// Update Memory tool
 	mcpServer.AddTool(
 		mcp.NewTool("update_memory",
-			mcp.WithDescription("Update an existing memory document. Name can be specified either as a parameter or in the frontmatter 'name' field. Timestamps (created/modified) are automatically managed by the server."+limitDesc),
+			mcp.WithDescription("Update an existing memory document. Requires metadata object for title, description, and tags. Timestamps (created/modified) are automatically managed by the server. Content length is limited to 2000 characters."),
 			mcp.WithString("name",
-				mcp.Description("Name of the memory to update. Optional if specified in frontmatter."),
+				mcp.Description("Name of the memory to update"),
+				mcp.Required(),
+			),
+			mcp.WithObject("metadata",
+				mcp.Description("Metadata object with required title, description, and tags fields, plus any additional properties"),
+				mcp.Required(),
 			),
 			mcp.WithString("content",
-				mcp.Description("New content for the memory. Any timestamps in frontmatter will be overwritten by server-managed values."),
+				mcp.Description("New content for the memory"),
 				mcp.Required(),
 			),
 		),
@@ -185,14 +194,56 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 	)
 }
 
+// textExtractor implements ast.NodeVisitor to extract plain text from markdown AST
+type textExtractor struct {
+	result strings.Builder
+}
+
+func (te *textExtractor) Visit(node ast.Node, entering bool) ast.WalkStatus {
+	switch n := node.(type) {
+	case *ast.Text:
+		if entering {
+			te.result.Write(n.Literal)
+		}
+	case *ast.Paragraph, *ast.Heading, *ast.BlockQuote, *ast.List, *ast.ListItem:
+		if !entering {
+			te.result.WriteString(" ")
+		}
+	case *ast.Softbreak, *ast.Hardbreak:
+		if entering {
+			te.result.WriteString(" ")
+		}
+	}
+	return ast.GoToNext
+}
+
+// stripMarkdown converts markdown to plain text by parsing and then extracting text content
+func stripMarkdown(content string) string {
+	// Create a parser with common extensions
+	p := parser.NewWithExtensions(parser.CommonExtensions)
+	
+	// Parse the markdown content
+	doc := markdown.Parse([]byte(content), p)
+	
+	// Extract plain text from the AST
+	extractor := &textExtractor{}
+	ast.Walk(doc, extractor)
+	
+	return strings.TrimSpace(extractor.result.String())
+}
+
 func (s *Server) validateMemoryLength(content string) error {
 	// If max_memory_length is <= 0, disable length check
 	if s.config.MaxMemoryLength <= 0 {
 		return nil
 	}
 
-	if len(content) > s.config.MaxMemoryLength {
-		return fmt.Errorf("memory content exceeds maximum length of %d characters (%d characters provided)", s.config.MaxMemoryLength, len(content))
+	// Strip markdown to get plain text length
+	plainText := stripMarkdown(content)
+	plainTextLength := len(plainText)
+
+	if plainTextLength > s.config.MaxMemoryLength {
+		return fmt.Errorf("memory content exceeds maximum length of %d characters (%d plain-text characters provided)", s.config.MaxMemoryLength, plainTextLength)
 	}
 
 	return nil
@@ -202,26 +253,78 @@ func (s *Server) handleCreateMemory(_ context.Context, request mcp.CallToolReque
 	name := request.GetString("name", "")
 	content := request.GetString("content", "")
 
-	// Try to extract name from frontmatter if not provided in request
-	if name == "" {
-		fm, _, err := memory.ParseDocument(content)
-		if err == nil && fm.Name != "" {
-			name = fm.Name
-		}
+	// Get metadata object from request
+	args := request.GetArguments()
+	metadataArg, ok := args["metadata"]
+	if !ok {
+		return nil, fmt.Errorf("metadata parameter is required")
+	}
+
+	metadataMap, ok := metadataArg.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("metadata must be an object")
 	}
 
 	// Validate that we have a name
 	if name == "" {
-		return nil, fmt.Errorf("memory name must be provided either as parameter or in frontmatter 'name' field")
+		return nil, fmt.Errorf("memory name is required")
+	}
+
+	// Validate required fields
+	title, titleExists := metadataMap["title"]
+	if !titleExists {
+		return nil, fmt.Errorf("metadata.title is required")
+	}
+	titleStr, ok := title.(string)
+	if !ok {
+		return nil, fmt.Errorf("metadata.title must be a string")
+	}
+
+	description, descExists := metadataMap["description"]
+	if !descExists {
+		return nil, fmt.Errorf("metadata.description is required")
+	}
+	descStr, ok := description.(string)
+	if !ok {
+		return nil, fmt.Errorf("metadata.description must be a string")
+	}
+
+	tags, tagsExists := metadataMap["tags"]
+	if !tagsExists {
+		return nil, fmt.Errorf("metadata.tags is required")
+	}
+	tagsMap, ok := tags.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("metadata.tags must be an object")
+	}
+
+	// Build frontmatter from metadata object
+	fm := &memory.Frontmatter{
+		Title:       titleStr,
+		Description: descStr,
+		Tags:        tagsMap,
+		Metadata:    make(map[string]interface{}),
+	}
+
+	// Add any additional metadata properties (excluding the standard ones)
+	for key, value := range metadataMap {
+		if key != "title" && key != "description" && key != "tags" {
+			fm.Metadata[key] = value
+		}
+	}
+
+	// Create document content with frontmatter
+	finalContent, err := memory.FormatDocument(fm, content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to format document: %w", err)
 	}
 
 	// Validate memory length
-	if err := s.validateMemoryLength(content); err != nil {
+	if err := s.validateMemoryLength(finalContent); err != nil {
 		return nil, err
 	}
 
-	// Note: Any user-provided timestamps in content will be overwritten by server-managed timestamps
-	if err := s.enhancedStore.Create(name, content); err != nil {
+	if err := s.enhancedStore.Create(name, finalContent); err != nil {
 		return nil, err
 	}
 
@@ -302,25 +405,78 @@ func (s *Server) handleUpdateMemory(_ context.Context, request mcp.CallToolReque
 	name := request.GetString("name", "")
 	content := request.GetString("content", "")
 
-	// Try to extract name from frontmatter if not provided in request
-	if name == "" {
-		fm, _, err := memory.ParseDocument(content)
-		if err == nil && fm.Name != "" {
-			name = fm.Name
-		}
+	// Get metadata object from request
+	args := request.GetArguments()
+	metadataArg, ok := args["metadata"]
+	if !ok {
+		return nil, fmt.Errorf("metadata parameter is required")
+	}
+
+	metadataMap, ok := metadataArg.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("metadata must be an object")
 	}
 
 	// Validate that we have a name
 	if name == "" {
-		return nil, fmt.Errorf("memory name must be provided either as parameter or in frontmatter 'name' field")
+		return nil, fmt.Errorf("memory name is required")
+	}
+
+	// Validate required fields
+	title, titleExists := metadataMap["title"]
+	if !titleExists {
+		return nil, fmt.Errorf("metadata.title is required")
+	}
+	titleStr, ok := title.(string)
+	if !ok {
+		return nil, fmt.Errorf("metadata.title must be a string")
+	}
+
+	description, descExists := metadataMap["description"]
+	if !descExists {
+		return nil, fmt.Errorf("metadata.description is required")
+	}
+	descStr, ok := description.(string)
+	if !ok {
+		return nil, fmt.Errorf("metadata.description must be a string")
+	}
+
+	tags, tagsExists := metadataMap["tags"]
+	if !tagsExists {
+		return nil, fmt.Errorf("metadata.tags is required")
+	}
+	tagsMap, ok := tags.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("metadata.tags must be an object")
+	}
+
+	// Build frontmatter from metadata object
+	fm := &memory.Frontmatter{
+		Title:       titleStr,
+		Description: descStr,
+		Tags:        tagsMap,
+		Metadata:    make(map[string]interface{}),
+	}
+
+	// Add any additional metadata properties (excluding the standard ones)
+	for key, value := range metadataMap {
+		if key != "title" && key != "description" && key != "tags" {
+			fm.Metadata[key] = value
+		}
+	}
+
+	// Create document content with frontmatter
+	finalContent, err := memory.FormatDocument(fm, content)
+	if err != nil {
+		return nil, fmt.Errorf("failed to format document: %w", err)
 	}
 
 	// Validate memory length
-	if err := s.validateMemoryLength(content); err != nil {
+	if err := s.validateMemoryLength(finalContent); err != nil {
 		return nil, err
 	}
 
-	if err := s.enhancedStore.Update(name, content); err != nil {
+	if err := s.enhancedStore.Update(name, finalContent); err != nil {
 		return nil, err
 	}
 
@@ -376,8 +532,9 @@ func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolReque
 			continue
 		}
 
-		// Calculate content length
-		contentLength := len(memInfo.Content)
+		// Calculate plain-text content length (markdown stripped)
+		plainText := stripMarkdown(memInfo.Content)
+		contentLength := len(plainText)
 
 		result += fmt.Sprintf("📄 **%s**", memory)
 		if memInfo.Frontmatter.Title != "" {

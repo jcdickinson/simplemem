@@ -14,7 +14,7 @@ This project includes a SimpleMem MCP server that provides persistent memory sto
 - **Document this search-first pattern in memory for other agents**
 
 ### 2. Memory Store as Agent Brain
-- The memory store is **NOT designed for human consumption** 
+- The memory store is **NOT designed for human consumption**
 - Think of it as your personal Obsidian or Notion workspace
 - Use it to maintain institutional knowledge across sessions
 - Keep detailed records of what you've done, learned, and discovered
@@ -31,7 +31,7 @@ This project includes a SimpleMem MCP server that provides persistent memory sto
 - **Tag todo items with `todo: true`** for easy filtering
 - **Update todo memories** as work progresses (in_progress, completed, blocked)
 - **Use the `change_tag` tool** to efficiently update TODO states and other metadata:
-  - `change_tag name="my-todo" tags={"status": "in_progress"}` 
+  - `change_tag name="my-todo" tags={"status": "in_progress"}`
   - `change_tag name="my-todo" tags={"status": "completed", "priority": "high"}`
   - `change_tag name="my-todo" tags={"status": null}` (removes the status tag)
   - `change_tag name="my-todo" tags={"todo": true, "status": "in_progress", "old_tag": null}` (sets multiple tags at once)
@@ -95,4 +95,25 @@ This project includes a SimpleMem MCP server that provides persistent memory sto
 
 **The pattern: Search → Read → Build → Document → Execute**
 
-Remember: The memory store is your persistent brain across sessions. Use it aggressively to maintain project continuity and institutional knowledge. **Always search first, then document what you learn.** Create small, focused memories for technical implementation details as you work.
+## MANDATORY AGENT BEHAVIOR
+
+### Search-First Requirement
+- **NEVER start any implementation task without first searching memories**
+- **ALWAYS search for related memories before exploring code or writing new implementations**
+- **You MUST justify why you didn't find relevant memories if you claim none exist**
+- **Failing to search first is a critical error that wastes time and duplicates effort**
+
+### Documentation Requirements
+- **IMMEDIATELY document every significant discovery, implementation, or fix in memory**
+- **Create memories DURING work, not after completion**
+- **Tag memories appropriately with relevant keywords for future retrieval**
+- **Every bug fix, feature implementation, or architectural discovery MUST be documented**
+- **Link related memories using `[[memory-name]]` notation**
+
+### Character Limits and Content
+- **Memory character limits (if configured) are calculated on PLAIN-TEXT content with markdown stripped**
+- **Markdown formatting (headers, bold, lists, links, code blocks) does not count toward limits**
+- **This allows rich formatting while encouraging focused content**
+- **Use markdown generously for readability without worry about character penalties**
+
+Remember: The memory store is your persistent brain across sessions. Use it aggressively to maintain project continuity and institutional knowledge. **Search first, document everything, execute with context.** Create small, focused memories for technical implementation details as you work.

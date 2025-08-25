@@ -62,7 +62,7 @@ func InitializeViper() error {
 	// Set defaults
 	viper.SetDefault("voyage_ai.model", "voyage-3.5")
 	viper.SetDefault("voyage_ai.rerank_model", "rerank-lite-1")
-	viper.SetDefault("max_memory_length", 2000)
+	viper.SetDefault("max_memory_length", 2500)
 
 	// Enable environment variable support
 	viper.SetEnvPrefix("SIMPLEMEM")
