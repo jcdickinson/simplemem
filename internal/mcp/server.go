@@ -136,13 +136,13 @@ func (s *Server) registerTools(mcpServer *server.MCPServer) {
 		s.handleDeleteMemory,
 	)
 
-	// List Memories tool
-	mcpServer.AddTool(
-		mcp.NewTool("list_memories",
-			mcp.WithDescription("List all memory documents with metadata preview including titles, tags, and modification dates"),
-		),
-		s.handleListMemories,
-	)
+	// List Memories tool - temporarily removed to encourage semantic search usage
+	// mcpServer.AddTool(
+	// 	mcp.NewTool("list_memories",
+	// 		mcp.WithDescription("List all memory documents with metadata preview including titles, tags, and modification dates"),
+	// 	),
+	// 	s.handleListMemories,
+	// )
 
 	// Search Memories tool
 	mcpServer.AddTool(
@@ -541,18 +541,6 @@ func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolReque
 			result += fmt.Sprintf(" - %s", memInfo.Frontmatter.Title)
 		}
 
-		if len(memInfo.Frontmatter.Tags) > 0 {
-			var tagsList []string
-			for tag, value := range memInfo.Frontmatter.Tags {
-				if value == true {
-					tagsList = append(tagsList, tag)
-				} else {
-					tagsList = append(tagsList, fmt.Sprintf("%s:%v", tag, value))
-				}
-			}
-			result += fmt.Sprintf(" 🏷️[%s]", strings.Join(tagsList, ", "))
-		}
-
 		result += fmt.Sprintf(" (%d chars)", contentLength)
 
 		// Warn if memory exceeds configured maximum length
@@ -560,15 +548,53 @@ func (s *Server) handleListMemories(_ context.Context, request mcp.CallToolReque
 			result += fmt.Sprintf(" ⚠️ OVER LIMIT (%d/%d)", contentLength, s.config.MaxMemoryLength)
 		}
 
-		if !memInfo.Frontmatter.Modified.IsZero() {
-			result += fmt.Sprintf(" (modified: %s)", memInfo.Frontmatter.Modified.Format("2006-01-02"))
-		}
+		result += "\n"
 
+		// Show all frontmatter fields
 		if memInfo.Frontmatter.Description != "" {
-			result += fmt.Sprintf("\n  %s", memInfo.Frontmatter.Description)
+			result += fmt.Sprintf("  📄 **Description:** %s\n", memInfo.Frontmatter.Description)
 		}
 
-		result += "\n\n"
+		if len(memInfo.Frontmatter.Tags) > 0 {
+			result += "  🏷️ **Tags:**\n"
+			for tag, value := range memInfo.Frontmatter.Tags {
+				if value == true {
+					result += fmt.Sprintf("    - %s\n", tag)
+				} else {
+					result += fmt.Sprintf("    - %s: %v\n", tag, value)
+				}
+			}
+		}
+
+		if !memInfo.Frontmatter.Created.IsZero() {
+			result += fmt.Sprintf("  📅 **Created:** %s\n", memInfo.Frontmatter.Created.Format("2006-01-02 15:04:05"))
+		}
+
+		if !memInfo.Frontmatter.Modified.IsZero() {
+			result += fmt.Sprintf("  🔄 **Modified:** %s\n", memInfo.Frontmatter.Modified.Format("2006-01-02 15:04:05"))
+		}
+
+		// Show non-required fields as YAML
+		nonRequiredFields := make(map[string]interface{})
+		
+		if len(memInfo.Frontmatter.Links) > 0 {
+			nonRequiredFields["links"] = memInfo.Frontmatter.Links
+		}
+		
+		// Add any additional metadata
+		for key, value := range memInfo.Frontmatter.Metadata {
+			nonRequiredFields[key] = value
+		}
+		
+		if len(nonRequiredFields) > 0 {
+			result += "  ```yaml\n"
+			for key, value := range nonRequiredFields {
+				result += fmt.Sprintf("  %s: %v\n", key, value)
+			}
+			result += "  ```\n"
+		}
+
+		result += "\n"
 	}
 
 	return &mcp.CallToolResult{

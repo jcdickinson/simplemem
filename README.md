@@ -127,14 +127,14 @@ Add to your MCP client configuration:
 #### Command Line Testing
 
 ```bash
-# List all memories
-just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"list_memories","arguments":{}},"id":1}'
-
 # Create a memory
-just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_memory","arguments":{"content":"---\nname: my-memory\ntitle: My First Memory\n---\n\n# Hello World\n\nThis is my first memory!"}},"id":1}'
+just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"create_memory","arguments":{"name":"my-memory","metadata":{"title":"My First Memory","description":"A test memory","tags":{"category":"test","priority":"low"}},"content":"# Hello World\n\nThis is my first memory!"}},"id":1}'
 
-# Search memories
+# Search memories (primary discovery method)
 just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"search_memories","arguments":{"query":"hello world"}},"id":1}'
+
+# Read a specific memory
+just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"read_memory","arguments":{"name":"my-memory"}},"id":1}'
 ```
 
 #### Testing Semantic Backlinks
@@ -149,36 +149,61 @@ just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"get_bac
 
 ## Available Tools (MCP)
 
-- **`list_memories`**: List all stored memories with metadata
-- **`create_memory`**: Create a new memory from markdown content
+- **`create_memory`**: Create a new memory with metadata object and markdown content
 - **`read_memory`**: Read a specific memory by name
-- **`update_memory`**: Update existing memory content
+- **`update_memory`**: Update existing memory metadata and content
 - **`delete_memory`**: Remove a memory and all related data
-- **`search_memories`**: Semantic search with optional tag filtering
+- **`search_memories`**: Semantic search with optional tag filtering (primary discovery method)
 - **`get_backlinks`**: Get memories related to a specific memory
 - **`change_tag`**: Modify tags on memories
 
+> **Note**: `list_memories` has been temporarily removed to encourage efficient semantic search usage instead of token-heavy full listings.
+
 ## Memory Format
 
-Memories use YAML frontmatter + Markdown:
+### API Structure (for create_memory/update_memory)
+
+```json
+{
+  "name": "my-memory-name",
+  "metadata": {
+    "title": "A Human-Readable Title",
+    "description": "Brief description of the memory", 
+    "tags": {
+      "category": "personal",
+      "priority": "high",
+      "status": "active"
+    },
+    "custom_field": "any_value",
+    "version": "1.0"
+  },
+  "content": "# Memory Content\n\nYour memory content in **Markdown** format.\n\n- Clean markdown without frontmatter\n- Links to [[other-memories]]\n- Whatever you need!"
+}
+```
+
+### On-Disk Storage
+
+Memories are stored as YAML frontmatter + Markdown:
 
 ```markdown
 ---
-name: my-memory-name
 title: A Human-Readable Title
-description: Optional description
+description: Brief description of the memory
 tags:
   category: personal
   priority: high
   status: active
+custom_field: any_value
+version: "1.0"
+created: 2025-01-24T12:00:00Z
+modified: 2025-01-24T12:00:00Z
 ---
 
 # Memory Content
 
-Your memory content goes here in **Markdown** format.
+Your memory content in **Markdown** format.
 
-- You can use lists
-- **Bold text**
+- Clean markdown without frontmatter
 - Links to [[other-memories]]
 - Whatever you need!
 ```
