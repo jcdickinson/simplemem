@@ -1,5 +1,5 @@
 {
-  description = "A basic gomod2nix flake";
+  description = "A simple semantic memory MCP.";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

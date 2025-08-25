@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive: tar.gz
+          - goos: linux
+            goarch: arm64
+            archive: tar.gz
+          - goos: windows
+            goarch: amd64
+            archive: zip
+            extension: .exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          binary_name="simplemem"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            binary_name="${binary_name}.exe"
+          fi
+          go build -ldflags="-s -w" -o "${binary_name}" ./cmd/simplemem
+
+      - name: Create archive
+        run: |
+          binary_name="simplemem"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            binary_name="${binary_name}.exe"
+          fi
+          
+          archive_name="simplemem-${{ github.event.release.tag_name }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          
+          if [ "${{ matrix.archive }}" = "tar.gz" ]; then
+            tar -czf "${archive_name}.tar.gz" "${binary_name}" README.md LICENSE config.toml.example
+            echo "ASSET=${archive_name}.tar.gz" >> $GITHUB_ENV
+          else
+            zip "${archive_name}.zip" "${binary_name}" README.md LICENSE config.toml.example
+            echo "ASSET=${archive_name}.zip" >> $GITHUB_ENV
+          fi
+
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./${{ env.ASSET }}
+          asset_name: ${{ env.ASSET }}
+          asset_content_type: application/octet-stream

@@ -29,9 +29,21 @@ Think of it as Claude's personal notebook that never forgets and can find connec
 
 ### Installation
 
+#### Option 1: Download Pre-built Binaries
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/jcdickinson/simplemem/releases):
+
+- **Linux AMD64**: `simplemem-vX.X.X-linux-amd64.tar.gz`
+- **Linux ARM64**: `simplemem-vX.X.X-linux-arm64.tar.gz` 
+- **Windows AMD64**: `simplemem-vX.X.X-windows-amd64.zip`
+
+Extract and place the binary in your PATH.
+
+#### Option 2: Build from Source
+
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/simplemem
+git clone https://github.com/jcdickinson/simplemem
 cd simplemem
 
 # Install dependencies
@@ -39,6 +51,26 @@ just deps
 
 # Build the binary
 just build
+```
+
+#### Option 3: Nix
+
+If you have Nix with flakes enabled:
+
+```bash
+# Run directly from GitHub
+nix run github:jcdickinson/simplemem
+
+# Or clone and run locally
+git clone https://github.com/jcdickinson/simplemem
+cd simplemem
+nix run
+
+# Install to profile
+nix profile install github:jcdickinson/simplemem
+
+# Run in development shell
+nix develop
 ```
 
 ### Configuration

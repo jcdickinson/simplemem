@@ -12,7 +12,7 @@
   ),
   buildGoApplication ? pkgs.buildGoApplication,
   meta ? {},
-  pname ? "cithing",
+  pname ? "simplemem",
   version ? "0.1",
   subPackages ? null,
 }:
