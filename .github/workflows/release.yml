@@ -23,9 +23,6 @@ jobs:
           - goos: linux
             goarch: amd64
             archive: tar.gz
-          - goos: linux
-            goarch: arm64
-            archive: tar.gz
 
     steps:
       - name: Checkout code
@@ -36,13 +33,6 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Install cross-compilation tools
-        run: |
-          sudo apt-get update
-          if [ "${{ matrix.goarch }}" = "arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
-
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
@@ -50,9 +40,6 @@ jobs:
           CGO_ENABLED: 1
         run: |
           binary_name="simplemem"
-          if [ "${{ matrix.goarch }}" = "arm64" ]; then
-            export CC=aarch64-linux-gnu-gcc
-          fi
           go build -ldflags="-s -w" -o "${binary_name}" ./cmd/simplemem
 
       - name: Create archive

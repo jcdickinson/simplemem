@@ -34,7 +34,6 @@ Think of it as Claude's personal notebook that never forgets and can find connec
 Download the latest release for your platform from [GitHub Releases](https://github.com/jcdickinson/simplemem/releases):
 
 - **Linux AMD64**: `simplemem-vX.X.X-linux-amd64.tar.gz`
-- **Linux ARM64**: `simplemem-vX.X.X-linux-arm64.tar.gz`
 
 Extract and place the binary in your PATH.
 
