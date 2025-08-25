@@ -25,7 +25,7 @@ Think of it as Claude's personal notebook that never forgets and can find connec
 ### Prerequisites
 
 - Go 1.21+
-- A Voyage AI API key (set as `VOYAGE_API_KEY` environment variable)
+- A Voyage AI API key (see Configuration section below)
 
 ### Installation
 
@@ -41,6 +41,42 @@ just deps
 just build
 ```
 
+### Configuration
+
+SimpleMem uses TOML-based configuration with flexible options for API keys and settings.
+
+#### Configuration File
+
+Create a `config.toml` file (see `config.toml.example` for reference):
+
+```toml
+[voyage_ai]
+model = "voyage-3.5"
+rerank_model = "rerank-lite-1"
+
+[voyage_ai.api_key]
+path = "~/.config/simplemem/voyage_ai_key"
+# OR set directly (not recommended for production)
+# value = "your-api-key-here"
+```
+
+#### Environment Variables
+
+You can also configure using environment variables:
+
+```bash
+export SIMPLEMEM_VOYAGE_AI_API_KEY="your-api-key"
+export SIMPLEMEM_VOYAGE_AI_MODEL="voyage-3.5" 
+export SIMPLEMEM_VOYAGE_AI_RERANK_MODEL="rerank-lite-1"
+```
+
+#### Configuration Options
+
+- **Custom config file**: Use `--config path/to/config.toml`
+- **Database path**: Use `--db path/to/database.db` (can also be set in config)
+- **API key sources**: File path (recommended) or direct value
+- **Multiple configs**: Different configs for different projects
+
 ### Usage
 
 #### As an MCP Server
@@ -52,7 +88,7 @@ Add to your MCP client configuration:
   "mcpServers": {
     "simplemem": {
       "command": "./simplemem",
-      "args": ["--db", "path/to/your/database.db"]
+      "args": ["--db", "path/to/your/database.db", "--config", "path/to/config.toml"]
     }
   }
 }
