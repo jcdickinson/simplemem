@@ -3,6 +3,13 @@ name: Release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      test_build:
+        description: 'Test build only (no release artifacts)'
+        required: false
+        default: 'true'
+        type: boolean
 
 jobs:
   build:
@@ -75,6 +82,7 @@ jobs:
           fi
 
       - name: Upload release asset
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
