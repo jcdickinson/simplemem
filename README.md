@@ -34,7 +34,7 @@ Think of it as Claude's personal notebook that never forgets and can find connec
 Download the latest release for your platform from [GitHub Releases](https://github.com/jcdickinson/simplemem/releases):
 
 - **Linux AMD64**: `simplemem-vX.X.X-linux-amd64.tar.gz`
-- **Linux ARM64**: `simplemem-vX.X.X-linux-arm64.tar.gz` 
+- **Linux ARM64**: `simplemem-vX.X.X-linux-arm64.tar.gz`
 - **Windows AMD64**: `simplemem-vX.X.X-windows-amd64.zip`
 
 Extract and place the binary in your PATH.
@@ -98,7 +98,7 @@ You can also configure using environment variables:
 
 ```bash
 export SIMPLEMEM_VOYAGE_AI_API_KEY="your-api-key"
-export SIMPLEMEM_VOYAGE_AI_MODEL="voyage-3.5" 
+export SIMPLEMEM_VOYAGE_AI_MODEL="voyage-3.5"
 export SIMPLEMEM_VOYAGE_AI_RERANK_MODEL="rerank-lite-1"
 ```
 
@@ -152,7 +152,7 @@ just test-json '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"get_bac
 ## Available Tools (MCP)
 
 - **`list_memories`**: List all stored memories with metadata
-- **`create_memory`**: Create a new memory from markdown content  
+- **`create_memory`**: Create a new memory from markdown content
 - **`read_memory`**: Read a specific memory by name
 - **`update_memory`**: Update existing memory content
 - **`delete_memory`**: Remove a memory and all related data
@@ -190,7 +190,6 @@ Your memory content goes here in **Markdown** format.
 ### Prerequisites
 
 - [Just](https://github.com/casey/just) command runner
-- [Jujutsu](https://github.com/martinvonz/jj) for version control (or Git)
 
 ### Common Commands
 
@@ -225,7 +224,7 @@ just test-json '<json>' /tmp/test.db
 # Quick minimal test
 just test-clean /tmp/debug.db
 
-# Build and test in one command  
+# Build and test in one command
 just build-test
 ```
 
@@ -250,7 +249,7 @@ just build-test
 This is a vibe-coded project, so contributions should match the energy:
 
 1. Make it work first
-2. Make it work well second  
+2. Make it work well second
 3. Make it pretty... maybe later?
 4. Tests are aspirational
 5. If it breaks, fix it with more vibes
@@ -263,7 +262,7 @@ LGPL 3.0 - Use it, modify it, vibe with it (but share improvements back to the c
 
 - Built with love and caffeine
 - Powered by [Voyage AI](https://voyageai.com) embeddings
-- Uses [DuckDB](https://duckdb.org) for storage  
+- Uses [DuckDB](https://duckdb.org) for storage
 - MCP integration via [mark3labs/mcp-go](https://github.com/mark3labs/mcp-go)
 
 ---
